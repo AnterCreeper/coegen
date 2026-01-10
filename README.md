@@ -13,10 +13,16 @@ This project is licensed under the LGPL-2.1-or-later license. **DO NOT** downloa
 
 ### Overview
 
-This Project is used to convert binary to xilinx vivado coe text.
+This Project is used to convert binary to FPGA and Memory Compiler ROM coe text.  
+Only Little Endian format is supported.
+
+### TODO
+1. Support non power-of-two bit width.
+2. Asm output in char, and custom array name
 
 ### Usage
-```coegen -b <width> -o <output> <input>```
-- `width`: bit width of memory block
-- `output`: print to output file instead of console
+```coegen -s <style> -b <width> [-o <output>] <input>```
 - `style`: output text format, style supported: `xilinx`, `gowin`, `asm`
+- `width`: bit width of memory block in bytes
+- `input`: input binary file path
+- `output`: print to output file instead of console

@@ -102,9 +102,8 @@ int main(int argc, char* argv[]) {
 		if (feof(src)) {
 			if (style == XILINX)
 				fprintf(result, ";\n"); //for Xilinx
-			if (style == ASM) {
+			if (style == ASM)
 				fprintf(result, "\n\t.size\tdata, %d\n", fsize(src));
-			}
 			break;
 		}
 		fprintf(result, "\n");
