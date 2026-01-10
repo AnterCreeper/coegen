@@ -19,3 +19,4 @@ This Project is used to convert binary to xilinx vivado coe text.
 ```coegen -b <width> -o <output> <input>```
 - `width`: bit width of memory block
 - `output`: print to output file instead of console
+- `style`: output text format, style supported: `xilinx`, `gowin`, `asm`
