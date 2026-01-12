@@ -21,8 +21,9 @@ Only Little Endian format is supported.
 2. Asm output in char, and custom array name
 
 ### Usage
-```coegen -s <style> -b <width> [-o <output>] <input>```
+```coegen -f <style> [-s <varname>] -b <width> [-o <output>] <input>```
 - `style`: output text format, style supported: `xilinx`, `gowin`, `asm`
+- `varname`: variable name for `asm`
 - `width`: bit width of memory block in bytes
 - `input`: input binary file path
 - `output`: print to output file instead of console

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <getopt.h>
 
-#define OPT_STRING 		"b:o:s:"
+#define OPT_STRING 		"b:o:f:s:"
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 
 enum COE_STYLE {
@@ -24,6 +24,7 @@ size_t fsize(FILE* fd) {
 
 int main(int argc, char* argv[]) {
 	int size = 0;
+	char* varname = NULL;
 	coe_style_t style = NONE;
 	FILE* result = stdout;
 
@@ -36,7 +37,7 @@ int main(int argc, char* argv[]) {
 	case 'o':
 		result = fopen(optarg, "w");
 		break;
-	case 's':
+	case 'f':
 		if (strcasecmp(optarg, "xilinx") == 0) {
 			style = XILINX;
 			break;
@@ -50,6 +51,9 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 		break;
+	case 's':
+		varname = optarg;
+		break;
 	case '?':
 		return -1;
 	}
@@ -61,6 +65,10 @@ int main(int argc, char* argv[]) {
 		if (size == 0) size = 4;
 		if (size != 4) {
 			fprintf(stderr, "%s: error: only 32 bit width supported for style \'asm\'\n", argv[0]);
+			return -1;
+		}
+		if (varname == NULL) {
+			fprintf(stderr, "%s: error: no specific variable name for style \'asm\'\n", argv[0]);
 			return -1;
 		}
 	}
@@ -86,9 +94,9 @@ int main(int argc, char* argv[]) {
 	if (style == ASM) {
 		fprintf(result, "\t.type\tdata,@object\n");
 		fprintf(result, "\t.data\n");
-		fprintf(result, "\t.globl\tdata\n");
+		fprintf(result, "\t.globl\t%s\n", varname);
 		fprintf(result, "\t.p2align\t4\n");
-		fprintf(result, "data:\n");
+		fprintf(result, "%s:\n", varname);
 	}
 
 	for (;;) {
@@ -103,7 +111,7 @@ int main(int argc, char* argv[]) {
 			if (style == XILINX)
 				fprintf(result, ";\n"); //for Xilinx
 			if (style == ASM)
-				fprintf(result, "\n\t.size\tdata, %d\n", fsize(src));
+				fprintf(result, "\n\t.size\t%s, %d\n", varname, fsize(src));
 			break;
 		}
 		fprintf(result, "\n");
