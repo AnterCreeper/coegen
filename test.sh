@@ -20,6 +20,10 @@ test "$(sed -n '1p' "$tmp/width12.txt")" = 101010111100
 test "$(sed -n '2p' "$tmp/width12.txt")" = 000000000000
 test "$(sed -n '3p' "$tmp/width12.txt")" = 000000000000
 
+printf '\012\274' > "$tmp/width12-big.bin"
+"$tmp/coegen" -f smic -w 12 -e big "$tmp/width12-big.bin" > "$tmp/width12-big.txt"
+test "$(cat "$tmp/width12-big.txt")" = 101010111100
+
 printf '\274\372' > "$tmp/overflow-bits.bin"
 if "$tmp/coegen" -f smic -w 12 "$tmp/overflow-bits.bin" >/dev/null 2>&1; then
 	exit 1
