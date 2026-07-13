@@ -14,17 +14,30 @@ This project is licensed under the LGPL-2.1-or-later license. **DO NOT** downloa
 
 ### Overview
 
-This Project is used to convert binary to FPGA and Memory Compiler ROM coe text.  
-Only Little Endian format is supported.
+This project converts byte-aligned binary images to FPGA and memory-compiler
+ROM initialization text. Existing formats use little-endian words. The SMIC
+format supports little-endian (default) and big-endian input words.
 
 ### TODO
-1. Support non power-of-two bit width.
-2. Asm output in char, and custom array name
+1. Asm output in char, and custom array name
 
 ### Usage
-```coegen -f <style> [-s <varname>] -b <width> [-o <output>] <input>```
-- `style`: output text format, style supported: `xilinx`, `gowin`, `asm`
+```text
+coegen -f <style> [-s <varname>] -b <bytes> [-o <output>] <input>
+coegen -f smic -w <bits> [-e little|big] [-d <words>] [-o <output>] <input>
+```
+
+- `style`: output text format; supported styles are `xilinx`, `gowin`, `asm`,
+  and `smic`
 - `varname`: variable name for `asm`
-- `width`: bit width of memory block in bytes
+- `bytes`: legacy word width in bytes for `xilinx`, `gowin`, and `asm`
+- `bits`: output word width in bits for `smic`; it need not be byte-aligned
+- `little|big`: byte order within each input word; default is `little`
+- `words`: exact SMIC output depth; short inputs are zero-filled and oversized
+  inputs are rejected
 - `input`: input binary file path
 - `output`: print to output file instead of console
+
+For SMIC output, every input word occupies `ceil(bits / 8)` bytes. Any unused
+high bits in a non-byte-aligned input word must be zero. Output contains exactly
+one MSB-first binary word per line.
