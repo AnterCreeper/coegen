@@ -8,7 +8,7 @@
 #include <strings.h>
 
 #define OPT_STRING "b:d:e:f:o:s:w:"
-#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#define DIV_ROUND_UP(n, d) ((n) / (d) + ((n) % (d) != 0))
 
 enum COE_STYLE {
 	NONE = 0,
@@ -48,18 +48,38 @@ static int parse_positive(const char *text, size_t *value) {
 	return 0;
 }
 
-static void print_smic_word(FILE *result, const unsigned char *buf,
-			    size_t width_bits, byte_order_t order) {
+static int get_value_bit(const unsigned char *buf, size_t width_bytes,
+			 size_t value_bit, byte_order_t order) {
+	size_t value_byte = value_bit / 8;
+	size_t input_byte = order == LITTLE_ENDIAN_ORDER
+		? value_byte
+		: width_bytes - 1 - value_byte;
+	return (buf[input_byte] & (1u << (value_bit % 8))) != 0;
+}
+
+static void print_binary_word(FILE *result, const unsigned char *buf,
+			      size_t width_bits, byte_order_t order) {
 	size_t width_bytes = DIV_ROUND_UP(width_bits, 8);
 	for (size_t output_bit = width_bits; output_bit > 0; output_bit--) {
 		size_t value_bit = output_bit - 1;
-		size_t value_byte = value_bit / 8;
-		size_t input_byte = order == LITTLE_ENDIAN_ORDER
-			? value_byte
-			: width_bytes - 1 - value_byte;
-		fputc((buf[input_byte] & (1u << (value_bit % 8))) ? '1' : '0', result);
+		fputc(get_value_bit(buf, width_bytes, value_bit, order) ? '1' : '0', result);
 	}
-	fputc('\n', result);
+}
+
+static void print_hex_word(FILE *result, const unsigned char *buf,
+			   size_t width_bits, byte_order_t order) {
+	static const char digits[] = "0123456789abcdef";
+	size_t width_bytes = DIV_ROUND_UP(width_bits, 8);
+	size_t output_digits = DIV_ROUND_UP(width_bits, 4);
+
+	for (size_t output_digit = output_digits; output_digit > 0; output_digit--) {
+		size_t first_bit = (output_digit - 1) * 4;
+		unsigned int value = 0;
+		for (size_t bit = 0; bit < 4 && first_bit + bit < width_bits; bit++)
+			if (get_value_bit(buf, width_bytes, first_bit + bit, order))
+				value |= 1u << bit;
+		fputc(digits[value], result);
+	}
 }
 
 static int validate_unused_bits(const unsigned char *buf, size_t width_bits,
@@ -73,6 +93,41 @@ static int validate_unused_bits(const unsigned char *buf, size_t width_bits,
 	most_significant_byte = order == LITTLE_ENDIAN_ORDER ? width_bytes - 1 : 0;
 	unused_mask = 0xffu << remainder;
 	return (buf[most_significant_byte] & unused_mask) == 0 ? 0 : -1;
+}
+
+static void print_header(FILE *result, coe_style_t style, size_t output_words,
+			 size_t width_bits, const char *varname) {
+	if (style == XILINX)
+		fprintf(result, "memory_initialization_radix=16;\nmemory_initialization_vector=\n");
+	else if (style == GOWIN)
+		fprintf(result, "#File_format=Hex\n#Address_depth=%zu\n#Data_width=%zu\n",
+			output_words, width_bits);
+	else if (style == ASM) {
+		fprintf(result, "\t.type\tdata,@object\n\t.data\n\t.globl\t%s\n", varname);
+		fprintf(result, "\t.p2align\t4\n%s:\n", varname);
+	}
+}
+
+static void print_word(FILE *result, coe_style_t style, const unsigned char *buf,
+		       size_t width_bits, byte_order_t order, int last) {
+	if (style == ASM)
+		fprintf(result, "\t.4byte\t0x");
+
+	if (style == SMIC)
+		print_binary_word(result, buf, width_bits, order);
+	else
+		print_hex_word(result, buf, width_bits, order);
+
+	if (style == XILINX)
+		fprintf(result, last ? ";\n" : ",\n");
+	else
+		fputc('\n', result);
+}
+
+static void print_footer(FILE *result, coe_style_t style, const char *varname,
+			 size_t input_size) {
+	if (style == ASM)
+		fprintf(result, "\t.size\t%s, %zu\n", varname, input_size);
 }
 
 int main(int argc, char *argv[]) {
@@ -146,28 +201,41 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "%s: error: no specific output style\n", argv[0]);
 		goto done;
 	}
-	if (style == SMIC) {
-		if (width_bits == 0) {
-			fprintf(stderr, "%s: error: style 'smic' requires -w <bits>\n", argv[0]);
-			goto done;
-		}
-		size = DIV_ROUND_UP(width_bits, 8);
-	} else {
-		if (width_bits != 0 || depth != 0 || order != LITTLE_ENDIAN_ORDER) {
-			fprintf(stderr, "%s: error: -w, -d, and -e apply only to style 'smic'\n", argv[0]);
-			goto done;
-		}
-		if (style == ASM && size == 0)
-			size = 4;
-		if (size == 0) {
-			fprintf(stderr, "%s: error: no specific byte width\n", argv[0]);
-			goto done;
-		}
+	if (style == ASM && width_bits != 0) {
+		fprintf(stderr, "%s: error: style 'asm' does not support -w\n", argv[0]);
+		goto done;
 	}
+	if (style == ASM && (depth != 0 || order != LITTLE_ENDIAN_ORDER)) {
+		fprintf(stderr, "%s: error: style 'asm' does not support -d or -e\n", argv[0]);
+		goto done;
+	}
+	if (style == ASM && size == 0)
+		size = 4;
 	if (style == ASM && (size != 4 || varname == NULL)) {
 		fprintf(stderr, "%s: error: style 'asm' requires -b 4 and -s <varname>\n", argv[0]);
 		goto done;
 	}
+	if (style != ASM) {
+		if (width_bits != 0 && size != 0) {
+			fprintf(stderr, "%s: error: specify either -w <bits> or -b <bytes>, not both\n",
+				argv[0]);
+			goto done;
+		}
+		if (width_bits == 0) {
+			if (size == 0) {
+				fprintf(stderr, "%s: error: no specific word width\n", argv[0]);
+				goto done;
+			}
+			if (size > SIZE_MAX / 8) {
+				fprintf(stderr, "%s: error: byte width is too large\n", argv[0]);
+				goto done;
+			}
+			width_bits = size * 8;
+		} else
+			size = DIV_ROUND_UP(width_bits, 8);
+	}
+	if (style == ASM)
+		width_bits = 32;
 	if (optind >= argc) {
 		fprintf(stderr, "%s: error: no input files\n", argv[0]);
 		goto done;
@@ -183,7 +251,12 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "%s: error: cannot determine input size\n", argv[0]);
 		goto done;
 	}
-	size_t input_words = DIV_ROUND_UP(input_size, size);
+	if (input_size % size != 0) {
+		fprintf(stderr, "%s: error: input size is not aligned to the %zu-byte word width\n",
+			argv[0], size);
+		goto done;
+	}
+	size_t input_words = input_size / size;
 	size_t output_words = depth == 0 ? input_words : depth;
 	if (input_words > output_words) {
 		fprintf(stderr, "%s: error: input requires %zu words but depth is %zu\n",
@@ -196,46 +269,23 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "%s: error: out of memory\n", argv[0]);
 		goto done;
 	}
-	if (style == XILINX)
-		fprintf(result, "memory_initialization_radix=16;\nmemory_initialization_vector=\n");
-	if (style == GOWIN)
-		fprintf(result, "#File_format=Hex\n#Address_depth=%zu\n#Data_width=%zu\n",
-			output_words, size * 8);
-	if (style == ASM) {
-		fprintf(result, "\t.type\tdata,@object\n\t.data\n\t.globl\t%s\n", varname);
-		fprintf(result, "\t.p2align\t4\n%s:\n", varname);
-	}
+	print_header(result, style, output_words, width_bits, varname);
 
 	for (size_t word = 0; word < output_words; word++) {
-		size_t bytes_read;
 		memset(buf, 0, size);
-		bytes_read = fread(buf, 1, size, src);
-		if (ferror(src)) {
+		if (word < input_words && fread(buf, 1, size, src) != size) {
 			fprintf(stderr, "%s: error: failed to read input\n", argv[0]);
 			goto done;
 		}
-		if (style == SMIC) {
-			if (validate_unused_bits(buf, width_bits, order) != 0) {
-				fprintf(stderr, "%s: error: word %zu has non-zero bits outside width %zu\n",
-					argv[0], word, width_bits);
-				goto done;
-			}
-			print_smic_word(result, buf, width_bits, order);
-			continue;
+		if (validate_unused_bits(buf, width_bits, order) != 0) {
+			fprintf(stderr, "%s: error: word %zu has non-zero bits outside width %zu\n",
+				argv[0], word, width_bits);
+			goto done;
 		}
-		if (bytes_read == 0)
-			break;
-		if (style == ASM)
-			fprintf(result, "\t.4byte\t0x");
-		for (size_t i = size; i > 0; i--)
-			fprintf(result, "%02x", buf[i - 1]);
-		if (style == XILINX && word + 1 == output_words)
-			fprintf(result, ";\n");
-		else
-			fprintf(result, "\n");
+		print_word(result, style, buf, width_bits, order,
+			   word + 1 == output_words);
 	}
-	if (style == ASM)
-		fprintf(result, "\t.size\t%s, %zu\n", varname, input_size);
+	print_footer(result, style, varname, input_size);
 	status = 0;
 
 done:

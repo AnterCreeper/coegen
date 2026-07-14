@@ -14,30 +14,37 @@ This project is licensed under the LGPL-2.1-or-later license. **DO NOT** downloa
 
 ### Overview
 
-This project converts byte-aligned binary images to FPGA and memory-compiler
-ROM initialization text. Existing formats use little-endian words. The SMIC
-format supports little-endian (default) and big-endian input words.
+This project converts byte-packed binary images to FPGA and memory-compiler ROM
+initialization text. Input words use little-endian byte order by default; Xilinx,
+Gowin, and SMIC output also supports big-endian input words.
 
 ### TODO
 1. Asm output in char, and custom array name
 
 ### Usage
 ```text
-coegen -f <style> [-s <varname>] -b <bytes> [-o <output>] <input>
-coegen -f smic -w <bits> [-e little|big] [-d <words>] [-o <output>] <input>
+coegen -f xilinx|gowin|smic (-w <bits> | -b <bytes>) [-e little|big] [-d <words>] [-o <output>] <input>
+coegen -f asm [-b 4] -s <varname> [-o <output>] <input>
 ```
 
 - `style`: output text format; supported styles are `xilinx`, `gowin`, `asm`,
   and `smic`
 - `varname`: variable name for `asm`
-- `bytes`: legacy word width in bytes for `xilinx`, `gowin`, and `asm`
-- `bits`: output word width in bits for `smic`; it need not be byte-aligned
+- `bytes`: byte-aligned word width; retained for compatibility and equivalent
+  to `-w <bytes * 8>` for `xilinx`, `gowin`, and `smic`
+- `bits`: logical output word width; it need not be byte-aligned
 - `little|big`: byte order within each input word; default is `little`
-- `words`: exact SMIC output depth; short inputs are zero-filled and oversized
-  inputs are rejected
+- `words`: exact output depth; short inputs are zero-filled and oversized inputs
+  are rejected
 - `input`: input binary file path
 - `output`: print to output file instead of console
 
-For SMIC output, every input word occupies `ceil(bits / 8)` bytes. Any unused
-high bits in a non-byte-aligned input word must be zero. Output contains exactly
-one MSB-first binary word per line.
+Every input word occupies `ceil(bits / 8)` bytes, and the input file size must be
+a multiple of that byte count. Words do not share a packed bitstream. Any unused
+high bits in a non-byte-aligned word must be zero, accounting for the selected
+byte order.
+
+Xilinx and Gowin emit the minimum `ceil(bits / 4)` hexadecimal digits per word;
+the leading digit is zero-padded when the logical width is not nibble-aligned.
+SMIC emits exactly `bits` MSB-first binary digits per line. ASM remains a fixed
+32-bit little-endian formatter.
