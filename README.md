@@ -16,22 +16,22 @@ This project is licensed under the LGPL-2.1-or-later license. **DO NOT** downloa
 
 This project converts byte-packed binary images to FPGA and memory-compiler ROM
 initialization text. Input words use little-endian byte order by default; Xilinx,
-Gowin, and SMIC output also supports big-endian input words.
+Gowin, and Verilog output also supports big-endian input words.
 
 ### TODO
 1. Asm output in char, and custom array name
 
 ### Usage
 ```text
-coegen -f xilinx|gowin|smic (-w <bits> | -b <bytes>) [-e little|big] [-d <words>] [-o <output>] <input>
+coegen -f xilinx|gowin|verilog (-w <bits> | -b <bytes>) [-e little|big] [-d <words>] [-o <output>] <input>
 coegen -f asm [-b 4] -s <varname> [-o <output>] <input>
 ```
 
 - `style`: output text format; supported styles are `xilinx`, `gowin`, `asm`,
-  and `smic`
+  and `verilog`
 - `varname`: variable name for `asm`
 - `bytes`: byte-aligned word width; retained for compatibility and equivalent
-  to `-w <bytes * 8>` for `xilinx`, `gowin`, and `smic`
+  to `-w <bytes * 8>` for `xilinx`, `gowin`, and `verilog`
 - `bits`: logical output word width; it need not be byte-aligned
 - `little|big`: byte order within each input word; default is `little`
 - `words`: exact output depth; short inputs are zero-filled and oversized inputs
@@ -46,5 +46,6 @@ byte order.
 
 Xilinx and Gowin emit the minimum `ceil(bits / 4)` hexadecimal digits per word;
 the leading digit is zero-padded when the logical width is not nibble-aligned.
-SMIC emits exactly `bits` MSB-first binary digits per line. ASM remains a fixed
+Verilog emits exactly `bits` MSB-first binary digits per line for use with
+`$readmemb`. ASM remains a fixed
 32-bit little-endian formatter.

@@ -15,7 +15,7 @@ enum COE_STYLE {
 	XILINX,
 	GOWIN,
 	ASM,
-	SMIC
+	VERILOG
 };
 typedef enum COE_STYLE coe_style_t;
 
@@ -113,7 +113,7 @@ static void print_word(FILE *result, coe_style_t style, const unsigned char *buf
 	if (style == ASM)
 		fprintf(result, "\t.4byte\t0x");
 
-	if (style == SMIC)
+	if (style == VERILOG)
 		print_binary_word(result, buf, width_bits, order);
 	else
 		print_hex_word(result, buf, width_bits, order);
@@ -181,8 +181,8 @@ int main(int argc, char *argv[]) {
 				style = GOWIN;
 			else if (strcasecmp(optarg, "asm") == 0)
 				style = ASM;
-			else if (strcasecmp(optarg, "smic") == 0)
-				style = SMIC;
+			else if (strcasecmp(optarg, "verilog") == 0)
+				style = VERILOG;
 			break;
 		case 's':
 			varname = optarg;
